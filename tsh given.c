@@ -1,11 +1,8 @@
-/* 2016142212 Kim Seonghoon */
-
 /*
  * tsh - A tiny shell program with job control
  *
  * <Put your name and login ID here>
  */
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <signal.h>
@@ -158,6 +155,7 @@ main(int argc, char** argv)
 
   /* Execute the shell's read/eval loop */
   while (1) {
+
     /* Read command line */
     if (emit_prompt) {
       printf("%s", prompt);
@@ -193,146 +191,6 @@ main(int argc, char** argv)
 void
 eval(char* cmdline)
 {
-  int status;
-  int wait_result;
-  int parse_result;
-
-  // signal mask for blocking
-  sigset_t block;
-  // first, make empty mask
-  if (sigemptyset(&block) < 0)
-    unix_error("Failed to set empty signal mask\n");
-  // add SIGCHLD mask
-  if (sigaddset(&block, SIGCHLD) < 0)
-    unix_error("Failed to add signal mask\n");
-  // ready to use sigprocmask for blocking SIGCHLD
-
-  char* argv[MAXARGS];
-  parse_result = parseline(cmdline, argv);
-
-  // No argument was recieved
-  if (argv[0] == NULL)
-    unix_error("No Argument\n");
-
-  /////////////  background jobs ///////////////
-  // contains '&'. run in background job
-  else if (parse_result == 1) {
-
-    int fd[2];
-    pipe(fd);
-
-    int child;
-
-    // block SIGCHLD before fork
-    assert(!sigprocmask(SIG_BLOCK, &block, NULL));
-
-    int rc = fork();
-
-    // child process. runs command line
-    if (rc == 0) {
-      // fork once more for printing info
-      int rc2 = fork();
-      // child process. execution
-      if (rc2 == 0) {
-        printf("\n");
-        // execute the command
-        if (execvp(argv[0], argv) == -1) {
-          fprintf(stderr, "%s : Command not found.\n", argv[0]);
-          exit(0);
-        }
-        // fork error
-      } else if (rc2 < 0) {
-        unix_error("Fork Failed\n");
-        // parent process. wait for child to complete with waitpid
-        // when child is completed, print its info and get out
-      } else {
-        // addjob and unable mask
-        addjob(jobs, rc2, BG, argv[0]);
-        sigprocmask(SIG_UNBLOCK, &block, NULL);
-        // while loop until child has ended
-        while (1) {
-          wait_result = waitpid(rc2, &status, WNOHANG);
-          if (wait_result == -1) {
-            unix_error("ERROR");
-            break;
-            // wait_result = childpid, child has ended
-          } else if (wait_result > 0) {
-            struct job_t* end = getjobpid(jobs, wait_result);
-            //// print job info ////
-            printf("[%d] (%d) %s ", end->jid, end->pid, argv[0]);
-            int i = 1;
-            while (argv[i] != 0) {
-              printf("%s ", argv[i]);
-              i++;
-            }
-            printf("&\n");
-            //// print job info ////
-            deletejob(jobs, wait_result);
-            break;
-          }
-        }
-      }
-      exit(0);
-      // fork error
-    } else if (rc < 0) {
-      unix_error("Fork Failed\n");
-
-      // parent process. wait for child process to end
-      // and if ended successfully, deletejob
-    } else {
-      waitpid(rc, &status, WNOHANG);
-    }
-
-    /////////////  foreground jobs ///////////////
-  } else {
-    // branch = 1 -> goto buitin_cmd
-    int branch = !(strncmp(argv[0], "quit", 4) && strncmp(argv[0], "fg", 2) &&
-                   strncmp(argv[0], "bg", 2) && strncmp(argv[0], "jobs", 4));
-
-    // built-in command. send to builtin_cmd
-    if (branch) {
-      builtin_cmd(argv);
-    }
-    // User command
-    else {
-      // block SIGCHLD before fork()
-      assert(!sigprocmask(SIG_BLOCK, &block, NULL));
-      int rc = fork();
-      // child process. runs command line
-      if (rc == 0) {
-        // execute command
-        if (execvp(argv[0], argv) == -1) {
-          fprintf(stderr, "%s : Command not found.\n", argv[0]);
-          exit(0);
-        }
-        // fork error
-      } else if (rc < 0) {
-        unix_error("Fork Failed\n");
-        // parent process. wait for child process to end
-        // and if ended successfully, deletejob
-      } else {
-        addjob(jobs, rc, FG, argv[0]);
-        // unblock SIGCHLD after addjob is complete
-        assert(!sigprocmask(SIG_UNBLOCK, &block, NULL));
-        wait_result = waitpid(rc, &status, WUNTRACED);
-        if (wait_result == -1) {
-          if (status == ECHILD)
-            unix_error("No child process for current process\n");
-          else if (status == EINTR) {
-          }
-        } else {
-          // terminated abnormally
-          if (WIFSIGNALED(status)) {
-            printf("%d\n", WTERMSIG(status));
-          }
-          // terminated normally
-          else {
-            deletejob(jobs, wait_result);
-          }
-        }
-      }
-    }
-  }
   return;
 }
 
@@ -399,23 +257,6 @@ parseline(const char* cmdline, char** argv)
 int
 builtin_cmd(char** argv)
 {
-  // for getting wait status
-  // int status;
-
-  // quit
-  if (strncmp(argv[0], "quit", 4) == 0) {
-    exit(0);
-  }
-
-  // jobs
-  else if (strncmp(argv[0], "jobs", 4) == 0) {
-    listjobs(jobs);
-  }
-
-  // bg and fg
-  else if ((strncmp(argv[0], "bg", 2) & strncmp(argv[0], "fg", 2)) == 0)
-    do_bgfg(argv);
-
   return 0; /* not a builtin command */
 }
 
@@ -425,36 +266,6 @@ builtin_cmd(char** argv)
 void
 do_bgfg(char** argv)
 {
-  /* bg. Change a stopped background job to a running background */
-  if (strncmp(argv[0], "bg", 2) == 0) {
-
-    /* fg. Change a stopped or running background job to a running in the
-        foreground. */
-  } else if (strncmp(argv[0], "fg", 2) == 0) {
-    struct job_t bgjob;
-    int found = 0;
-
-    // find running background jobs
-    for (int i = 0; i < MAXJOBS; i++) {
-      if (jobs[i].state == BG) {
-        bgjob = jobs[i];
-        found = 1;
-        break;
-      }
-    }
-
-    if (found == 1) {
-      // send SIGTSTP to background to suspend its job
-      kill(bgjob.pid, SIGTSTP);
-
-      // bgjob should be turned to foreground job
-      bgjob.state = FG;
-      printf("%s, %d\n", bgjob.cmdline, bgjob.state);
-
-      kill(bgjob.pid, SIGTTIN);
-    }
-  }
-
   return;
 }
 
@@ -492,17 +303,6 @@ sigchld_handler(int sig)
 void
 sigint_handler(int sig)
 {
-  pid_t intpid;
-  // int status;
-
-  if (sig == SIGINT) {
-    // if there is no foreground jobs,
-    // SIGINT handler should not be executed
-    // so, check if there is foreground job
-    if ((intpid = fgpid(jobs)) != 0) {
-      printf("%d SIGINT\n", fgpid(jobs));
-    }
-  }
   return;
 }
 
@@ -514,9 +314,6 @@ sigint_handler(int sig)
 void
 sigtstp_handler(int sig)
 {
-  if (sig == SIGTSTP) {
-    printf("SIGTSTP\n");
-  }
   return;
 }
 
@@ -685,7 +482,7 @@ listjobs(struct job_t* jobs)
           printf(
             "listjobs: Internal error: job[%d].state=%d ", i, jobs[i].state);
       }
-      printf("%s\n", jobs[i].cmdline);
+      printf("%s", jobs[i].cmdline);
     }
   }
 }
@@ -745,6 +542,8 @@ Signal(int signum, handler_t* handler)
   if (sigaction(signum, &action, &old_action) < 0)
     unix_error("Signal error");
   return (old_action.sa_handler);
+
+  
 }
 
 /*
