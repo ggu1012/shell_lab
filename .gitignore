@@ -1,0 +1,8 @@
+## ignore file ##
+*.txt
+*.pl
+.gdb_history
+.vscode
+Makefile
+
+
