@@ -1,9 +1,8 @@
-/* 2016142212 Kim Seonghoon */
 
 /*
  * tsh - A tiny shell program with job control
  *
- * <Put your name and login ID here>
+ * 2016142212 Kim Seonghoon 
  */
 #include <assert.h>
 #include <ctype.h>
@@ -490,7 +489,7 @@ waitfg(pid_t pid)
     sleep(1);
 
   // when the foreground process changed its process,
-  // print out its log
+  // print out log, exit status is determined by 'flag' in sigchld_handler
   switch (flag) {
       // Ctrl + Z. SIGTSTP
     case TSTP:
@@ -527,7 +526,7 @@ sigchld_handler(int sig)
   int pid;
   int status;
 
-  // set MASK to avoid child signals
+  // set MASK to avoid child signals(SIGCHLD, SIGINT, SIGTSTP)
   // inside the handler
   sigset_t intr, prev;
 
@@ -543,6 +542,7 @@ sigchld_handler(int sig)
   // signal block
   assert(!sigprocmask(SIG_BLOCK, &intr, &prev));
 
+  // store errno
   int olderrno = errno;
 
   // reap all child processes
@@ -569,8 +569,10 @@ sigchld_handler(int sig)
     return;
   }
 
+  // restore errno
   errno = olderrno;
 
+  // signal unblock
   assert(!sigprocmask(SIG_SETMASK, &prev, NULL));
 
   return;
