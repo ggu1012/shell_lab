@@ -2,7 +2,7 @@
 /*
  * tsh - A tiny shell program with job control
  *
- * 2016142212 Kim Seonghoon 
+ * Student name, ID
  */
 #include <assert.h>
 #include <ctype.h>
