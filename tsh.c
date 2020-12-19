@@ -498,7 +498,7 @@ waitfg(pid_t pid)
 
       // Ctrl + C. SIGINT
     case INTR:
-      printf("Job [%d] (%d) is terminated by signal %d\n", jid, pid, SIGINT);
+      printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, SIGINT);
       break;
 
     case EXIT:
